@@ -1,20 +1,23 @@
-import threading
+"""Abstract base worker class providing screen boundary clamping and lifecycle controls for background processing threads."""
+
 import abc
 import logging
+import threading
 import mss
 
+
 class BaseWorker(threading.Thread, abc.ABC):
+
     def __init__(self, bbox, interval, event_queue, worker_name):
-        super().__init__(daemon=True)
+        super().__init__(name=worker_name, daemon=True)
+        self.running = False
         self.bbox = self._clamp_to_screen_bounds(bbox)
         self.interval = interval
-        self.running = False
         self.event_queue = event_queue
         self.worker_name = worker_name
 
     def _clamp_to_screen_bounds(self, bbox):
         x, y, w, h = bbox
-
         with mss.mss() as sct:
             primary = sct.monitors[1]
             screen_w = primary["width"]
@@ -26,7 +29,7 @@ class BaseWorker(threading.Thread, abc.ABC):
         safe_h = max(1, min(h, screen_h - safe_y))
 
         if (x, y, w, h) != (safe_x, safe_y, safe_w, safe_h):
-            logging.warning(f"[{self.__class__.__name__}] Bounding box adjusted from {(x,y,w,h)} to {(safe_x, safe_y, safe_w, safe_h)} for safety.")
+            logging.warning(f"[{self.__class__.__name__}] Bounding box adjusted from {(x, y, w, h)} to {(safe_x, safe_y, safe_w, safe_h)} for safety.")
 
         return (safe_x, safe_y, safe_w, safe_h)
 

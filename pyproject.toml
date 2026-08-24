@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "multimodal-notify"
+version = "0.1.0"
+description = "Modular multimodal event detection and notification framework"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pyyaml",
+    "discord.py"
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["multimodal_notify*"]
+
+[tool.setuptools.package-data]
+"multimodal_notify.profiles" = ["*.yaml", "*.YAML"]
+
+[project.scripts]
+multimodal_notify = "multimodal_notify.core.runtime:main"
