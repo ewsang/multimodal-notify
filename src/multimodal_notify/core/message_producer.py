@@ -1,11 +1,11 @@
 """Transforms normalized matching metrics into structured MessageEvent instances and broadcasts them to active connectors."""
-
 import re
+import logging
 from multimodal_notify.core.events.message_event import MessageEvent, MessageField
 
+log = logging.getLogger(__name__)
 
 class MessageProducer:
-
     def __init__(self, connectors, profile_config):
         self.connectors = connectors
         self.profile_config = profile_config
@@ -25,11 +25,9 @@ class MessageProducer:
         if source == "OCR" and "parser_schema" in self.profile_config:
             schema = self.profile_config["parser_schema"]
             pattern_str = schema.get("regex_pattern")
-
             if pattern_str:
                 pattern = re.compile(pattern_str)
                 match = pattern.search(norm)
-
                 if match:
                     mappings = schema.get("rule_mappings", {})
                     metadata["tier"] = match.group(mappings.get("tier")).strip()
@@ -43,3 +41,12 @@ class MessageProducer:
 
         for connector in self.connectors:
             connector.handle(event)
+
+    def shutdown(self):
+        """Iterate through all active connectors and trigger their shutdown routines."""
+        for connector in self.connectors:
+            if hasattr(connector, "shutdown") and callable(connector.shutdown):
+                try:
+                    connector.shutdown()
+                except Exception as e:
+                    log.error(f"Failed to cleanly shut down connector {connector.__class__.__name__}: {e}", exc_info=True)

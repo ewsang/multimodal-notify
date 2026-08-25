@@ -95,8 +95,12 @@ def main():
             except queue.Empty:
                 continue
     except KeyboardInterrupt:
-        logging.info("Shutting down core runtime.")
+        print("")
+        logging.warning("⚠️ Ctrl+C detected! Commencing graceful application shutdown...")
+        logging.info("Shutting down message producer and active connectors...")
+        message_producer.shutdown()
     finally:
+        logging.info("Shutting down core runtime workers.")
         dispatcher.stop_all()
 
 if __name__ == "__main__":
