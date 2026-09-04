@@ -11,13 +11,13 @@ from multimodal_notify.core.message_producer import MessageProducer
 from multimodal_notify.pipeline.worker_dispatcher import WorkerDispatcher
 from multimodal_notify.profiles import PROFILE_REGISTRY
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 LOG_DIR = PROJECT_ROOT / "tmp"
 LOG_FILE = LOG_DIR / "runtime.log"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format="%(asctime)s [%(levelname)s] (%(threadName)s) %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
     handlers=[
