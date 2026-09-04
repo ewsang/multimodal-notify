@@ -1,4 +1,6 @@
-# core/processors/__init__.py
-from .ocr_processor import OCRProcessor, levenshtein_distance
+"""Exposes core processing engines for computer vision and text analysis pipelines."""
 
-__all__ = ["OCRProcessor", "levenshtein_distance"]
+from multimodal_notify.core.processors.cv_processor import CVProcessor
+from multimodal_notify.core.processors.ocr_processor import OCRProcessor, levenshtein_distance
+
+__all__ = ["CVProcessor", "OCRProcessor", "levenshtein_distance"]

@@ -1,4 +1,4 @@
-"""Initialization index providing clean structural access to all active notification connector interfaces."""
+"""Exposes broadcast connector interfaces for dispatching system events."""
 
 from .discord_connector import DiscordConnector
 

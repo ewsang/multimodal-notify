@@ -5,6 +5,7 @@ import re
 
 
 def evaluate_reaction_emojis(metadata: dict, profile_config: dict) -> list[str]:
+    """Evaluates metadata properties against a list of reaction rules to return matching emojis."""
     rules = profile_config.get("reaction_rules", [])
     if not metadata or not rules:
         return []
@@ -33,12 +34,12 @@ def evaluate_reaction_emojis(metadata: dict, profile_config: dict) -> list[str]:
 
 
 def should_send_notification(matched_text: str, profile_config: dict) -> bool:
+    """Checks matched text against parsing schemas and matrix filter criteria to determine notification viability."""
     schema = profile_config.get("parser_schema", {})
     rules_container = profile_config.get("message_filter_rules", {})
     matrix = rules_container.get("matrix", {})
 
     logging.debug(f"Evaluating schema: {schema}, rules container: {rules_container}, matrix: {matrix} for text: '{matched_text}'")
-
     if not schema or not matrix:
         return True
 
@@ -53,17 +54,16 @@ def should_send_notification(matched_text: str, profile_config: dict) -> bool:
         mappings = schema.get("rule_mappings", {})
         tier_group_idx = mappings.get("tier")
         rarity_group_idx = mappings.get("rarity")
+        
         extracted_tier = match.group(tier_group_idx)
         extracted_rarity = match.group(rarity_group_idx)
-
-        logging.debug(f"Extracted Parameters: Tier='{extracted_tier}', Rarity='{extracted_rarity}' from text '{matched_text}'")
+        # logging.debug(f"Extracted Parameters: Tier='{extracted_tier}', Rarity='{extracted_rarity}' from text '{matched_text}'")
 
         if extracted_rarity in matrix:
             allowed_tiers = matrix[extracted_rarity]
             return extracted_tier in allowed_tiers
 
         return False
-
     except Exception as e:
         logging.error(f"Error evaluating text schema constraints: {e}")
         return False

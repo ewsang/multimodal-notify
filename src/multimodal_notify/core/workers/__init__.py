@@ -1,4 +1,6 @@
-# core/workers/__init__.py
-from .ocr_worker import OCRWorker
+"""Exposes background capture threads for multi-modal polling strategies."""
 
-__all__ = ["OCRWorker"]
+from multimodal_notify.core.workers.cv_worker import CVWorker
+from multimodal_notify.core.workers.ocr_worker import OCRWorker
+
+__all__ = ["CVWorker", "OCRWorker"]

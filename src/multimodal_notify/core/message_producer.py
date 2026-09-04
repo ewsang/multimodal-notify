@@ -1,52 +1,71 @@
 """Transforms normalized matching metrics into structured MessageEvent instances and broadcasts them to active connectors."""
-import re
+
 import logging
-from multimodal_notify.core.events.message_event import MessageEvent, MessageField
+import time
+
+from multimodal_notify.core.events.message_event import MessageEvent
 
 log = logging.getLogger(__name__)
 
+
 class MessageProducer:
-    def __init__(self, connectors, profile_config):
+    """Transforms raw worker records into standardized MessageEvents and dispatches them to connectors."""
+
+    def __init__(self, connectors: list, profile_config: dict):
+        """Initializes the producer engine with target connectors and active profile rules."""
         self.connectors = connectors
         self.profile_config = profile_config
 
-    def handle_new_message(self, record):
-        norm = record["text_normalized"]
-        ocr = record["text_ocr"]
+    def handle_new_message(self, record: dict) -> None:
+        """Processes normalized metrics from workers, extracts metadata schemas, and alerts connectors."""
+        norm = record.get("text_normalized", "")
+        ocr = record.get("text_ocr", "")
         source = record.get("source", "OCR")
 
-        formatter = self.profile_config.get("format_message")
-        description = formatter(norm, ocr) if formatter else norm
-
+        if not norm and "notification_message" in record:
+            description = record["notification_message"]
+        else:
+            formatter = self.profile_config.get("format_message")
+            description = formatter(norm, ocr) if formatter else norm
+        
         tag_extractor = self.profile_config.get("extract_tags")
-        metadata = tag_extractor(norm) if tag_extractor else {}
-        metadata["source"] = source
+        metadata = tag_extractor(norm) if tag_extractor and norm else {}
 
-        if source == "OCR" and "parser_schema" in self.profile_config:
-            schema = self.profile_config["parser_schema"]
-            pattern_str = schema.get("regex_pattern")
-            if pattern_str:
-                pattern = re.compile(pattern_str)
-                match = pattern.search(norm)
-                if match:
-                    mappings = schema.get("rule_mappings", {})
-                    metadata["tier"] = match.group(mappings.get("tier")).strip()
-                    metadata["rarity"] = match.group(mappings.get("rarity")).strip()
+        metadata["source"] = source
+        metadata["reaction_rules"] = record.get("reaction_rules", [])
+
+        ignored_keys = {
+            "source", "id", "text_ocr", "text_normalized", 
+            "timestamp", "reaction_rules", "frame", "notification_message"
+        }
+        for key, value in record.items():
+            if key not in ignored_keys:
+                metadata[key] = value
+
+        event_timestamp = (
+            record.get("timestamp") 
+            if record.get("timestamp") is not None 
+            else time.time()
+        )
 
         event = MessageEvent(
             description=description,
-            timestamp=record["timestamp"],
+            timestamp=event_timestamp,
             metadata=metadata,
         )
-
+        
         for connector in self.connectors:
             connector.handle(event)
 
-    def shutdown(self):
-        """Iterate through all active connectors and trigger their shutdown routines."""
+    def shutdown(self) -> None:
+        """Triggers shutdown routines across all active broadcasting connectors."""
         for connector in self.connectors:
             if hasattr(connector, "shutdown") and callable(connector.shutdown):
                 try:
                     connector.shutdown()
                 except Exception as e:
-                    log.error(f"Failed to cleanly shut down connector {connector.__class__.__name__}: {e}", exc_info=True)
+                    log.error(
+                        f"Failed to cleanly shut down connector "
+                        f"{connector.__class__.__name__}: {e}", 
+                        exc_info=True
+                    )

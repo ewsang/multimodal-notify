@@ -1,11 +1,11 @@
-"""Text extraction, normalization, and levenshtein distance deduplication engine."""
+"""Text normalization and Levenshtein distance deduplication processor."""
 
 import logging
 import threading
 import time
 
-
 def levenshtein_distance(a, b):
+    """Calculates the minimum edit operations required to transform string a into b."""
     if a == b:
         return 0
     if len(a) < len(b):
@@ -23,40 +23,46 @@ def levenshtein_distance(a, b):
 
 
 class OCRProcessor:
+    """Normalizes extracted on-screen text and maps matching sequences to a unified timeline."""
 
-    def __init__(self, profile_config):
-        self.config = profile_config
-        self.canonical_messages = self.config["expected_messages"]
+    def __init__(self, strategy_config: dict, worker_name: str):
+        """Initializes the tracking matrix caches using the provided strategy configuration."""
+        self.worker_name = worker_name
+        self.strategy_config = strategy_config
+
+        self.canonical_messages = strategy_config.get("expected_messages", [])
+        self.is_case_sensitive = strategy_config.get("case_sensitive", False)
+        self.match_threshold_pct = strategy_config.get("match_threshold_pct", 0.30)
+        
         self.messages_lock = threading.Lock()
         self.messages = []
         self.next_message_id = 1
         self.dedup_window = 8.0
 
     def normalize_ocr_text(self, raw_text):
+        """Fuzzy matches raw string targets against expected message registries."""
         cleaned_text = raw_text.strip()
         if not cleaned_text:
             return None
 
-        is_case_sensitive = self.config.get("case_sensitive", False)
-        if not is_case_sensitive:
+        if not self.is_case_sensitive:
             cleaned_text = cleaned_text.upper()
 
         best_match = None
         min_distance = float("inf")
 
         for keyword in self.canonical_messages:
-            target = keyword if is_case_sensitive else keyword.upper()
+            target = keyword if self.is_case_sensitive else keyword.upper()
             distance = levenshtein_distance(cleaned_text, target)
             if distance < min_distance:
                 min_distance = distance
                 best_match = keyword
 
-        threshold_pct = self.config.get("match_threshold_pct", 0.30)
-        max_allowed_dist = int(len(best_match) * threshold_pct)
-
-        if min_distance > max_allowed_dist:
+        max_allowed_dist = int(len(best_match) * self.match_threshold_pct) if best_match else 0
+        
+        if not best_match or min_distance > max_allowed_dist:
             logging.debug(
-                f"[Processor] Unreliable text discarded: '{raw_text}' "
+                f"[{self.worker_name}] Unreliable text discarded: '{raw_text}' "
                 f"(Best match: '{best_match}', Dist: {min_distance}/{max_allowed_dist})"
             )
             return None
@@ -67,6 +73,7 @@ class OCRProcessor:
         }
 
     def process_frame_text(self, raw_text_block):
+        """Parses multi-line text payloads, updating matched lines or yielding unique records."""
         lines = [line.strip() for line in raw_text_block.split("\n") if line.strip()]
         now = time.time()
         valid_lines = []
@@ -92,11 +99,11 @@ class OCRProcessor:
                 norm = processed["text_normalized"]
                 processed_frame_counts[norm] = processed_frame_counts.get(norm, 0) + 1
                 instance_index = processed_frame_counts[norm] - 1
+                
                 history_list = active_history_instances.get(norm, [])
-
                 if instance_index < len(history_list):
                     history_list[instance_index]["last_seen"] = now
-                    logging.debug(f"[Processor] Renewed duplicate message ID {history_list[instance_index]['id']} ({norm})")
+                    logging.debug(f"[{self.worker_name}] Renewed duplicate message ID {history_list[instance_index]['id']} ({norm})")
                 else:
                     new_record = {
                         "id": self.next_message_id,
