@@ -3,6 +3,7 @@
 import argparse
 import logging
 import queue
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from multimodal_notify.connectors import DiscordConnector
@@ -17,11 +18,17 @@ LOG_FILE = LOG_DIR / "runtime.log"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format="%(asctime)s [%(levelname)s] (%(threadName)s) %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
     handlers=[
-        logging.FileHandler(LOG_FILE, mode="a", encoding="utf-8"),
+        RotatingFileHandler(
+            LOG_FILE, 
+            mode="a", 
+            encoding="utf-8", 
+            maxBytes=5 * 1024 * 1024,
+            backupCount=3
+        ),
         logging.StreamHandler()
     ]
 )
