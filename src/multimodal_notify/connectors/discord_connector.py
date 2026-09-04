@@ -8,9 +8,9 @@ import time
 
 import discord
 
+from multimodal_notify.connectors.base_connector import BaseConnector
 from multimodal_notify.core.events.message_event import MessageEvent
 from multimodal_notify.core.message_filter import evaluate_reaction_emojis
-from .base_connector import BaseConnector
 
 log = logging.getLogger(__name__)
 

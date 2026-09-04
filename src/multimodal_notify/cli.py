@@ -6,9 +6,9 @@ import queue
 from pathlib import Path
 
 from multimodal_notify.connectors import DiscordConnector
+from multimodal_notify.config.secrets import Secrets
 from multimodal_notify.core.message_producer import MessageProducer
-from multimodal_notify.core.secrets import Secrets
-from multimodal_notify.core.worker_dispatcher import WorkerDispatcher
+from multimodal_notify.pipeline.worker_dispatcher import WorkerDispatcher
 from multimodal_notify.profiles import PROFILE_REGISTRY
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent

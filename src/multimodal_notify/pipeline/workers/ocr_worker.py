@@ -11,8 +11,8 @@ from Vision import (
 )
 
 from multimodal_notify.core.message_filter import should_send_notification
-from multimodal_notify.core.processors.ocr_processor import OCRProcessor
-from multimodal_notify.core.workers.base_worker import BaseWorker
+from multimodal_notify.pipeline.processors.ocr_processor import OCRProcessor
+from multimodal_notify.pipeline.workers.base_worker import BaseWorker
 
 log = logging.getLogger(__name__)
 

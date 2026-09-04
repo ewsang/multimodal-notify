@@ -10,7 +10,10 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "pyyaml",
-    "discord.py"
+    "discord.py",
+    "opencv-python",
+    "numpy",
+    "pyobjc-framework-Vision"
 ]
 
 [tool.setuptools]
@@ -24,4 +27,4 @@ include = ["multimodal_notify*"]
 "multimodal_notify.profiles" = ["*.yaml", "*.YAML"]
 
 [project.scripts]
-multimodal_notify = "multimodal_notify.core.runtime:main"
+multimodal_notify = "multimodal_notify.cli:main"

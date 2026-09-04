@@ -2,8 +2,8 @@
 
 import logging
 
-from multimodal_notify.core.workers.cv_worker import CVWorker
-from multimodal_notify.core.workers.ocr_worker import OCRWorker
+from multimodal_notify.pipeline.workers.cv_worker import CVWorker
+from multimodal_notify.pipeline.workers.ocr_worker import OCRWorker
 
 WORKER_FACTORY = {
     "cv": CVWorker,
@@ -32,11 +32,11 @@ class WorkerDispatcher:
                     bbox=bbox,
                     interval=interval,
                     event_queue=event_queue,
-                    worker_name=f"{name.upper()}Worker",
+                    worker_name=f"{name.upper()}-Worker",
                     strategy_config=inner_strategy_config
                 )
                 self.active_workers.append(worker)
-                logging.info(f"[Dispatcher] Initialized thread '{name.upper()}Worker'.")
+                logging.info(f"[Dispatcher] Initialized thread '{name.upper()}-Worker'.")
             else:
                 logging.warning(f"[Dispatcher] Unknown strategy requested: '{name}'")
 

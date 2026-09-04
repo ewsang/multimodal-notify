@@ -12,8 +12,8 @@ from Quartz import (
     CGImageGetWidth,
 )
 
-from multimodal_notify.core.workers.base_worker import BaseWorker
-from multimodal_notify.core.processors.cv_processor import CVProcessor
+from multimodal_notify.pipeline.processors.cv_processor import CVProcessor
+from multimodal_notify.pipeline.workers.base_worker import BaseWorker
 
 log = logging.getLogger(__name__)
 
