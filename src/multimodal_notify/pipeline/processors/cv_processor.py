@@ -23,7 +23,7 @@ class CVProcessor:
         self.template_matrix = None
 
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        path = os.path.join(current_dir, "../../../assets", self.template_name)
+        path = os.path.join(current_dir, "../../assets", self.template_name)
         
         log.debug(f"[{self.worker_name}] Core engine loading template matrix file: {path}")
         self.template_matrix = cv2.imread(path, cv2.IMREAD_COLOR)
