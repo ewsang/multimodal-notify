@@ -1,25 +1,21 @@
 """Abstract base worker class providing screen boundary clamping and thread lifecycle controls."""
-
 import abc
 import logging
 import queue
 import threading
 import time
-
 import mss
 from Quartz.CoreGraphics import CGDisplayCreateImageForRect, CGMainDisplayID, CGRectMake
+
+from multimodal_notify.core.types import SystemState
+from multimodal_notify.core.events import StateEvent
 
 
 class BaseWorker(threading.Thread, abc.ABC):
     """Abstract background thread orchestrating periodic screen capture processing loops."""
 
     def __init__(
-        self,
-        bbox: tuple,
-        interval: float,
-        event_queue: queue.Queue,
-        worker_name: str,
-        strategy_config: dict
+        self, bbox: tuple, interval: float, event_queue: queue.Queue, worker_name: str, strategy_config: dict
     ):
         """Initializes the thread context and applies screen boundary coordinate clamping."""
         super().__init__(name=worker_name, daemon=True)
@@ -36,45 +32,84 @@ class BaseWorker(threading.Thread, abc.ABC):
             primary = sct.monitors[1]
             screen_w = primary["width"]
             screen_h = primary["height"]
-            
-            safe_x = max(0, min(x, screen_w - 1))
-            safe_y = max(0, min(y, screen_h - 1))
-            safe_w = max(1, min(w, screen_w - safe_x))
-            safe_h = max(1, min(h, screen_h - safe_y))
-            
-            if (x, y, w, h) != (safe_x, safe_y, safe_w, safe_h):
-                logging.warning(
-                    f"[{self.__class__.__name__}] Bounding box adjusted from "
-                    f"{(x, y, w, h)} to {(safe_x, safe_y, safe_w, safe_h)} for safety."
-                )
-            return (safe_x, safe_y, safe_w, safe_h)
+
+        safe_x = max(0, min(x, screen_w - 1))
+        safe_y = max(0, min(y, screen_h - 1))
+        safe_w = max(1, min(w, screen_w - safe_x))
+        safe_h = max(1, min(h, screen_h - safe_y))
+
+        if (x, y, w, h) != (safe_x, safe_y, safe_w, safe_h):
+            logging.warning(
+                f"[{self.__class__.__name__}] Bounding box adjusted from "
+                f"{(x, y, w, h)} to {(safe_x, safe_y, safe_w, safe_h)} for safety."
+            )
+        return (safe_x, safe_y, safe_w, safe_h)
 
     def capture_screen_image(self):
         """Captures the designated bounding box region via direct top-level C-function references.
 
         Returns:
-            CGImageRef or None: The low-level macOS system image capture object.
+            CGImageRef: The low-level macOS system image capture object.
+
+        Raises:
+            RuntimeError: If Quartz screen capture fails due to display/power sleep or security lock.
         """
         x, y, w, h = self.bbox
         region_rect = CGRectMake(x, y, w, h)
         main_display = CGMainDisplayID()
-        return CGDisplayCreateImageForRect(main_display, region_rect)
+        
+        image = CGDisplayCreateImageForRect(main_display, region_rect)
+        
+        if image is None:
+            raise RuntimeError("Quartz failed to capture screen region (Display may be asleep or locked)")
+            
+        return image
 
     def run(self):
         """Executes the continuous periodic looping sequence driving child engine tasks."""
         self.running = True
         logging.info("Thread driving loop started.")
-        
+
+        current_backoff = 1.0  
+        max_backoff = 60.0
+        is_asleep = False
+
         while self.running:
             loop_start_time = time.time()
+            error_occurred = False
+
             try:
                 self.process()
             except Exception as e:
                 logging.exception(f"Exception caught inside [{self.name}] execution segment: {e}")
+                error_occurred = True
 
             elapsed = time.time() - loop_start_time
-            sleep_time = max(0.01, self.interval - elapsed)
-            time.sleep(sleep_time)
+            
+            if error_occurred:
+                if not is_asleep:
+                    is_asleep = True
+                    self.event_queue.put(StateEvent(
+                        state=SystemState.ASLEEP,
+                        worker_name=self.name,
+                        message=f"🌙 [{self.name}] Screen capture failed. Worker is backing off."
+                    ))
+
+                logging.info(f"[{self.name}] Backing off for {current_backoff} seconds...")
+                time.sleep(current_backoff)
+                
+                current_backoff = min(current_backoff * 2, max_backoff)
+            else:
+                if is_asleep:
+                    is_asleep = False
+                    self.event_queue.put(StateEvent(
+                        state=SystemState.AWAKE,
+                        worker_name=self.name,
+                        message=f"☀️ [{self.name}] Screen capture restored! Processing resumed."
+                    ))
+                current_backoff = 1.0  
+                sleep_time = max(0.01, self.interval - elapsed)
+                time.sleep(sleep_time)
 
         logging.info("Thread cleanly terminated.")
 

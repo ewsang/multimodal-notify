@@ -6,9 +6,11 @@ import queue
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from multimodal_notify.connectors import DiscordConnector
 from multimodal_notify.config.secrets import Secrets
-from multimodal_notify.core.message_producer import MessageProducer
+from multimodal_notify.connectors import DiscordConnector
+from multimodal_notify.core.types import SystemState
+from multimodal_notify.core.events import StateEvent, OcrEvent, CvEvent
+from multimodal_notify.core.producers import MessageProducer, StateProducer
 from multimodal_notify.pipeline.worker_dispatcher import WorkerDispatcher
 from multimodal_notify.profiles import PROFILE_REGISTRY
 
@@ -23,9 +25,9 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
     handlers=[
         RotatingFileHandler(
-            LOG_FILE, 
-            mode="a", 
-            encoding="utf-8", 
+            LOG_FILE,
+            mode="a",
+            encoding="utf-8",
             maxBytes=5 * 1024 * 1024,
             backupCount=3
         ),
@@ -34,12 +36,38 @@ logging.basicConfig(
 )
 
 
+class SystemStateManager:
+    """Manages system-wide sleep/wake transitions and deduplicates notifications."""
+
+    def __init__(self, state_producer: StateProducer) -> None:
+        """Initializes the manager with a dedicated event producer for system logs."""
+        self.state_producer = state_producer
+        self.last_status = SystemState.AWAKE
+
+    def handle_system_event(self, event: StateEvent) -> None:
+        """Processes an incoming worker system event and triggers notifications on state flips."""
+        event_status = event.state
+
+        if event_status == self.last_status:
+            return
+        self.last_status = event_status
+
+        if event_status == SystemState.ASLEEP:
+            display_msg = "⚠️ [SYSTEM] Multimodal Notification Engine is pausing (Display locked/asleep)."
+            logging.warning(display_msg)
+            self.state_producer.handle_state_change(event)
+        elif event_status == SystemState.AWAKE:
+            display_msg = "☀️ [SYSTEM] Multimodal Notification Engine has resumed processing!"
+            logging.info(display_msg)
+            self.state_producer.handle_state_change(event)
+
+
 def build_connectors(secrets: Secrets, profile_config: dict) -> list:
-    """Builds and returns a list of configured connector instances."""
+    """Build and return configured connector instances."""
     discord_cfg = profile_config.get("discord", {})
     channel_id = discord_cfg.get("channel_id")
     role_map = {
-        key.upper(): value 
+        key.upper(): value
         for key, value in discord_cfg.get("roles", {}).items()
     }
     logging.debug(f"Channel ID: {channel_id}, Role Map: {role_map}")
@@ -64,7 +92,17 @@ def main() -> None:
     parser.add_argument(
         "--profile", choices=PROFILE_REGISTRY.keys(), required=True
     )
+    parser.add_argument(
+        "-l", "--log-level",
+        type=str,
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        help="Set the application logging threshold level (default: INFO)"
+    )
     args = parser.parse_args()
+
+    numeric_level = getattr(logging, args.log_level.upper(), logging.INFO)
+    logging.root.setLevel(numeric_level)
 
     profile_config = PROFILE_REGISTRY[args.profile]
     profile_strategies = profile_config["strategies"]
@@ -91,36 +129,36 @@ def main() -> None:
             try:
                 event = event_queue.get(timeout=0.1)
 
-                if event["source"] == "OCR":
+                if isinstance(event, OcrEvent):
                     logging.info(
                         f"📝 OCR verified event received: "
-                        f"'{event.get('text_normalized')}'"
+                        f"'{event.text_normalized}'"
                     )
                     message_producer.handle_new_message(event)
 
-                elif event["source"] == "CV":
+                elif isinstance(event, CvEvent):
                     logging.info(
                         f"🎯 CV match confirmed event payload received for "
-                        f"template: '{event['template_name']}'"
+                        f"template: '{event.template_name}'"
                     )
                     message_producer.handle_new_message(event)
 
                 event_queue.task_done()
-                
+
             except queue.Empty:
                 continue
-                
+
     except KeyboardInterrupt:
         print("")
         logging.warning("Beginning application shutdown...")
-        
+
     finally:
         logging.info("Shutting down active background thread workers...")
         dispatcher.stop_all()
-        
+
         logging.info("Shutting down message producer and connectors...")
         message_producer.shutdown()
-        
+
         logging.info("Application cleanly terminated.")
 
 

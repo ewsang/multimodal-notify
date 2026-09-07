@@ -1,6 +1,5 @@
-"""Exposes background capture threads for multi-modal polling strategies."""
+from .base_worker import BaseWorker
+from .cv_worker import CvWorker
+from .ocr_worker import OcrWorker
 
-from multimodal_notify.pipeline.workers.cv_worker import CVWorker
-from multimodal_notify.pipeline.workers.ocr_worker import OCRWorker
-
-__all__ = ["CVWorker", "OCRWorker"]
+__all__ = ["BaseWorker", "CvWorker", "OcrWorker"]

@@ -1,29 +1,30 @@
 """Thread lifecycle manager for initializing, starting, and gracefully stopping capture workers."""
 
 import logging
+from typing import List
 
-from multimodal_notify.pipeline.workers.cv_worker import CVWorker
-from multimodal_notify.pipeline.workers.ocr_worker import OCRWorker
+from multimodal_notify.pipeline.workers.cv_worker import CvWorker
+from multimodal_notify.pipeline.workers.ocr_worker import OcrWorker
 
 WORKER_FACTORY = {
-    "cv": CVWorker,
-    "ocr": OCRWorker,
+    "cv": CvWorker,
+    "ocr": OcrWorker,
 }
 
 
 class WorkerDispatcher:
-    """Manages active capture worker threads and ensures balanced thread terminations."""
+    """Manage active worker threads and balanced terminations."""
 
-    def __init__(self):
-        self.active_workers = []
+    def __init__(self) -> None:
+        self.active_workers: List = []
 
-    def initialize_workers(self, strategy_names, profile_strategies, event_queue):
-        """Instantiates distinct worker class threads according to requested strategy layouts."""
+    def initialize_workers(self, strategy_names: list, profile_strategies: dict, event_queue: object) -> None:
+        """Instantiate distinct worker threads from requested strategy layouts."""
         for name in strategy_names:
             if name in WORKER_FACTORY:
                 worker_class = WORKER_FACTORY[name]
                 processed_data = profile_strategies.get(name, {})
-                
+
                 interval = processed_data.get("interval", 0.500)
                 bbox = processed_data.get("bbox", (0, 0, 1920, 1080))
                 inner_strategy_config = processed_data.get("strategy_config", {})
@@ -40,11 +41,13 @@ class WorkerDispatcher:
             else:
                 logging.warning(f"[Dispatcher] Unknown strategy requested: '{name}'")
 
-    def start_all(self):
+    def start_all(self) -> None:
+        """Start all background worker threads."""
         for worker in self.active_workers:
             worker.start()
 
-    def stop_all(self):
+    def stop_all(self) -> None:
+        """Gracefully stop all running worker threads."""
         for worker in self.active_workers:
             worker.stop()
         for worker in self.active_workers:

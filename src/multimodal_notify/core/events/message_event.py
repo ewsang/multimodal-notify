@@ -1,32 +1,45 @@
+"""Data schemas representing specific extraction data found by worker processors."""
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict
+from typing import Dict, List, Optional
+import numpy as np
+from multimodal_notify.core.events.base_event import BaseEvent
+
 
 @dataclass
 class MessageField:
+    """Helper field structure containing explicit Discord embed components."""
+
     name: str
     value: str
     inline: bool = False
 
-@dataclass
-class MessageEvent:
+
+@dataclass(frozen=True, kw_only=True)
+class MessageEvent(BaseEvent):
+    """Refactored event wrapper routing engine metadata out to connectors."""
+
     description: str
-
-    timestamp: Optional[float] = None
+    message_type: str = "plain_text"
     color: Optional[int] = None
-
     author: Optional[str] = None
-    author_url: Optional[str] = None
-    author_icon_url: Optional[str] = None
-
-    thumbnail_url: Optional[str] = None
-
-    title: Optional[str] = None
-    title_url: Optional[str] = None
-
-    fields: List[MessageField] = field(default_factory=list)
-
-    footer: Optional[str] = None
-
-    message_type: Optional[str] = None
-
     metadata: Dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, kw_only=True)
+class OcrEvent(MessageEvent):
+    """Data container captured by screen OCR processing pipelines."""
+
+    id: str
+    text_ocr: str
+    text_normalized: str
+    reaction_rules: List[dict]
+
+
+@dataclass(frozen=True, kw_only=True)
+class CvEvent(MessageEvent):
+    """Data container captured by template computer vision processing pipelines."""
+
+    frame: np.ndarray
+    template_name: str
+    notification_message: str
+    reaction_rules: List[dict]

@@ -3,14 +3,17 @@
 import logging
 import threading
 import time
+from typing import List
+from multimodal_notify.core.events import OcrEvent
 
-def levenshtein_distance(a, b):
-    """Calculates the minimum edit operations required to transform string a into b."""
+
+def levenshtein_distance(a: str, b: str) -> int:
+    """Calculate minimum edit operations to transform string a into b."""
     if a == b:
         return 0
     if len(a) < len(b):
         a, b = b, a
-    previous = range(len(b) + 1)
+    previous = list(range(len(b) + 1))
     for i, ca in enumerate(a, 1):
         current = [i]
         for j, cb in enumerate(b, 1):
@@ -22,25 +25,25 @@ def levenshtein_distance(a, b):
     return previous[-1]
 
 
-class OCRProcessor:
-    """Normalizes extracted on-screen text and maps matching sequences to a unified timeline."""
+class OcrProcessor:
+    """Normalize extracted text and map sequences to a unified timeline."""
 
-    def __init__(self, strategy_config: dict, worker_name: str):
-        """Initializes the tracking matrix caches using the provided strategy configuration."""
+    def __init__(self, strategy_config: dict, worker_name: str) -> None:
+        """Initialize fuzzy caches using profile strategy rules."""
         self.worker_name = worker_name
         self.strategy_config = strategy_config
 
         self.canonical_messages = strategy_config.get("expected_messages", [])
         self.is_case_sensitive = strategy_config.get("case_sensitive", False)
         self.match_threshold_pct = strategy_config.get("match_threshold_pct", 0.30)
-        
+
         self.messages_lock = threading.Lock()
-        self.messages = []
+        self.messages: List[dict] = []
         self.next_message_id = 1
         self.dedup_window = 8.0
 
-    def normalize_ocr_text(self, raw_text):
-        """Fuzzy matches raw string targets against expected message registries."""
+    def normalize_ocr_text(self, raw_text: str) -> dict | None:
+        """Fuzzy match raw string targets against expected message registries."""
         cleaned_text = raw_text.strip()
         if not cleaned_text:
             return None
@@ -59,7 +62,7 @@ class OCRProcessor:
                 best_match = keyword
 
         max_allowed_dist = int(len(best_match) * self.match_threshold_pct) if best_match else 0
-        
+
         if not best_match or min_distance > max_allowed_dist:
             logging.debug(
                 f"[{self.worker_name}] Unreliable text discarded: '{raw_text}' "
@@ -72,8 +75,8 @@ class OCRProcessor:
             "text_normalized": best_match
         }
 
-    def process_frame_text(self, raw_text_block):
-        """Parses multi-line text payloads, updating matched lines or yielding unique records."""
+    def process_frame_text(self, raw_text_block: str) -> List[OcrEvent]:
+        """Parse multi-line text payloads to update or yield unique records."""
         lines = [line.strip() for line in raw_text_block.split("\n") if line.strip()]
         now = time.time()
         valid_lines = []
@@ -99,20 +102,30 @@ class OCRProcessor:
                 norm = processed["text_normalized"]
                 processed_frame_counts[norm] = processed_frame_counts.get(norm, 0) + 1
                 instance_index = processed_frame_counts[norm] - 1
-                
+
                 history_list = active_history_instances.get(norm, [])
                 if instance_index < len(history_list):
                     history_list[instance_index]["last_seen"] = now
-                    logging.debug(f"[{self.worker_name}] Renewed duplicate message ID {history_list[instance_index]['id']} ({norm})")
+                    logging.debug(
+                        f"[{self.worker_name}] Renewed duplicate message ID "
+                        f"{history_list[instance_index]['id']} ({norm})"
+                    )
                 else:
-                    new_record = {
+                    new_record = OcrEvent(
+                        source=f"processor.ocr.{self.worker_name}",
+                        id=str(self.next_message_id),
+                        text_ocr=processed["text_ocr"],
+                        text_normalized=norm,
+                        reaction_rules=self.strategy_config.get("reaction_rules", []),
+                        metadata={"engine_version": "1.0.0"},
+                        description=f"Fuzzy OCR Match: {norm}"
+                    )
+
+                    self.messages.append({
                         "id": self.next_message_id,
-                        "text_ocr": processed["text_ocr"],
                         "text_normalized": norm,
-                        "timestamp": now,
                         "last_seen": now
-                    }
-                    self.messages.append(new_record)
+                    })
                     self.next_message_id += 1
                     new_message_records.append(new_record)
 
